@@ -527,10 +527,14 @@ final class PermissionManager
 
     private function result(mixed $data, array $log): OperationResult
     {
-        if ($this->events && method_exists($this->events, 'dispatch')) {
-            $this->events->dispatch('prefab.log', $log);
-        } else {
-            PrefabRuntime::emitLog($log);
+        try {
+            if ($this->events && method_exists($this->events, 'dispatch')) {
+                $this->events->dispatch('prefab.log', $log);
+            } else {
+                PrefabRuntime::emitLog($log);
+            }
+        } catch (\Throwable $e) {
+            error_log('Prefab Permissions logging failed: ' . $e->getMessage());
         }
 
         return new OperationResult($data, $log);
