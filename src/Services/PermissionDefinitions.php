@@ -128,6 +128,33 @@ final class PermissionDefinitions
         return (bool) ($this->definitions[$permission]['default'] ?? false);
     }
 
+    /** @return list<string> */
+    public function scopes(string $permission): array
+    {
+        $definition = $this->get($permission);
+        if (!$definition) {
+            return [];
+        }
+
+        $scopes = $definition['scopes'] ?? ['global'];
+        if (!is_array($scopes)) {
+            $scopes = [$scopes];
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map(
+                static fn(mixed $scope): string => is_string($scope) ? trim($scope) : '',
+                $scopes,
+            ),
+            static fn(string $scope): bool => $scope !== '',
+        )));
+    }
+
+    public function supportsScope(string $permission, string $scopeType): bool
+    {
+        return in_array($scopeType, $this->scopes($permission), true);
+    }
+
     /**
      * Validate an override map against known permission IDs.
      *
