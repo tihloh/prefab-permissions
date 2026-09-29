@@ -545,3 +545,113 @@ The important rule remains:
 > **Authentication identifies the user. Permissions decides what that user may do.**
 
 Prefab makes those responsibilities cooperate without forcing them into one monolithic framework.
+
+
+---
+
+# 23. Scoped permissions
+
+Permission definitions can declare where the same permission may be granted:
+
+```php
+return [
+    'users.manage' => [
+        'name' => 'Manage Users',
+        'default' => false,
+        'scopes' => ['global', 'organization'],
+    ],
+
+    'settings.manage' => [
+        'name' => 'Manage System Settings',
+        'default' => false,
+        'scopes' => ['global'],
+    ],
+];
+```
+
+The permission ID remains the same. Scope only limits where the grant is effective.
+
+Global grants continue to use the normal API:
+
+```php
+$permissions->set('user', $userId, 'users.manage', true);
+$permissions->can($userId, 'users.manage');
+```
+
+An organization-scoped grant uses:
+
+```php
+$permissions->setScoped(
+    'user',
+    $userId,
+    'users.manage',
+    true,
+    'organization',
+    $organizationId,
+);
+
+$allowed = $permissions->can(
+    $userId,
+    'users.manage',
+    $groupIds,
+    'organization',
+    $organizationId,
+);
+```
+
+The built-in database store keeps scoped grants separately from global grants in:
+
+```text
+prefab_subject_permissions_scoped
+```
+
+A scoped row identifies:
+
+```text
+subject_type
+subject_id
+scope_type
+scope_id
+permissions
+```
+
+Resolution for a scoped check is:
+
+```text
+explicit global user override
+        ↓
+explicit global group decision
+        ↓
+scoped user override
+        ↓
+scoped group decision
+        ↓
+definition default
+```
+
+This means a global grant applies in every organization, while an organization grant applies only when the application checks that organization's scope.
+
+Prefab Permissions does not decide whether a document, user, request, or other resource belongs to an organization. The host application supplies the resource's scope:
+
+```php
+$permissions->can(
+    $actorId,
+    'documents.manage',
+    $groupIds,
+    'organization',
+    $document->organization_id,
+);
+```
+
+Important APIs:
+
+| API | Purpose |
+|---|---|
+| `can(..., $scopeType, $scopeId)` | Resolve permission inside a scope |
+| `resolve(..., $scopeType, $scopeId)` | Resolve with source information |
+| `setScoped()` | Set a scoped allow/deny |
+| `clearScoped()` | Remove a scoped override |
+| `overridesForScope()` | Read scoped overrides |
+| `resolvedFor(..., $scopeType, $scopeId)` | Resolve all permissions inside a scope |
+
+Custom permission stores can opt into scoped authorization by implementing `ScopedPermissionStoreInterface`. Existing stores implementing only `PermissionStoreInterface` remain compatible for global permissions.
