@@ -9,6 +9,7 @@ use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\PrefabConfig;
 use Tihloh\Prefab\PrefabRuntime;
 use Tihloh\Prefab\Permissions\Contracts\PermissionStoreInterface;
+use Tihloh\Prefab\Permissions\Contracts\ScopedPermissionStoreInterface;
 use Tihloh\Prefab\Permissions\Contracts\PermissionSubjectInterface;
 use Tihloh\Prefab\Permissions\DTOs\OperationResult;
 use Tihloh\Prefab\Permissions\DTOs\PermissionResult;
@@ -313,11 +314,15 @@ final class PermissionManager
         PermissionSubjectInterface|int|string $subject,
         string $permission,
         array $groupIds = [],
+        ?string $scopeType = null,
+        int|string|null $scopeId = null,
     ): bool {
         return $this->resolve(
             $subject,
             $permission,
             $groupIds,
+            $scopeType,
+            $scopeId,
         )->allowed;
     }
 
@@ -325,6 +330,8 @@ final class PermissionManager
         PermissionSubjectInterface|int|string $subject,
         string $permission,
         array $groupIds = [],
+        ?string $scopeType = null,
+        int|string|null $scopeId = null,
     ): PermissionResult {
         $definitions = $this->defs();
         $store = $this->store();
@@ -340,12 +347,70 @@ final class PermissionManager
             $subjectId = $subject;
         }
 
-        $userOverrides = $store->get('user', $subjectId);
+        // Global explicit decisions always apply, including inside a scope.
+        $global = $this->resolveFrom(
+            fn(string $type, int|string $id): array => $store->get($type, $id),
+            $subjectId,
+            $permission,
+            $groupIds,
+            'user',
+            'group',
+        );
+
+        if ($global !== null) {
+            return $global;
+        }
+
+        if ($scopeType !== null || $scopeId !== null) {
+            if ($scopeType === null || $scopeId === null) {
+                throw new \InvalidArgumentException('Both scope type and scope ID are required.');
+            }
+
+            if (!$definitions->supportsScope($permission, $scopeType)) {
+                return new PermissionResult(false, 'scope_not_supported');
+            }
+
+            if ($store instanceof ScopedPermissionStoreInterface) {
+                $scoped = $this->resolveFrom(
+                    fn(string $type, int|string $id): array => $store->getScoped(
+                        $type,
+                        $id,
+                        $scopeType,
+                        $scopeId,
+                    ),
+                    $subjectId,
+                    $permission,
+                    $groupIds,
+                    'scoped_user',
+                    'scoped_group',
+                );
+
+                if ($scoped !== null) {
+                    return $scoped;
+                }
+            }
+        }
+
+        return new PermissionResult(
+            $definitions->default($permission),
+            'default',
+        );
+    }
+
+    private function resolveFrom(
+        callable $read,
+        int|string $subjectId,
+        string $permission,
+        array $groupIds,
+        string $userSource,
+        string $groupSource,
+    ): ?PermissionResult {
+        $userOverrides = $read('user', $subjectId);
 
         if (array_key_exists($permission, $userOverrides)) {
             return new PermissionResult(
-                (bool) $userOverrides[$permission],
-                'user',
+                (bool)$userOverrides[$permission],
+                $userSource,
             );
         }
 
@@ -353,7 +418,7 @@ final class PermissionManager
         $denyingGroups = [];
 
         foreach ($groupIds as $groupId) {
-            $groupOverrides = $store->get('group', $groupId);
+            $groupOverrides = $read('group', $groupId);
 
             if (!array_key_exists($permission, $groupOverrides)) {
                 continue;
@@ -369,7 +434,7 @@ final class PermissionManager
         if ($allowingGroups !== []) {
             return new PermissionResult(
                 true,
-                'group',
+                $groupSource,
                 $allowingGroups,
                 $denyingGroups,
             );
@@ -378,16 +443,13 @@ final class PermissionManager
         if ($denyingGroups !== []) {
             return new PermissionResult(
                 false,
-                'group',
+                $groupSource,
                 $denyingGroups,
                 $denyingGroups,
             );
         }
 
-        return new PermissionResult(
-            $definitions->default($permission),
-            'default',
-        );
+        return null;
     }
 
     public function overridesFor(string $type, int|string $id): array
@@ -395,10 +457,22 @@ final class PermissionManager
         return $this->store()->get($type, $id);
     }
 
+    public function overridesForScope(
+        string $type,
+        int|string $id,
+        string $scopeType,
+        int|string $scopeId,
+    ): array {
+        $store = $this->scopedStore();
+        return $store->getScoped($type, $id, $scopeType, $scopeId);
+    }
+
     /** @return array<string, PermissionResult> */
     public function resolvedFor(
         PermissionSubjectInterface|int|string $subject,
         array $groups = [],
+        ?string $scopeType = null,
+        int|string|null $scopeId = null,
     ): array {
         $results = [];
 
@@ -407,6 +481,8 @@ final class PermissionManager
                 $subject,
                 $permission,
                 $groups,
+                $scopeType,
+                $scopeId,
             );
         }
 
@@ -484,6 +560,103 @@ final class PermissionManager
         );
     }
 
+    public function setScoped(
+        string $type,
+        int|string $id,
+        string $permission,
+        bool $value,
+        string $scopeType,
+        int|string $scopeId,
+        array $context = [],
+    ): OperationResult {
+        $definitions = $this->defs();
+        if (!$definitions->supportsScope($permission, $scopeType)) {
+            throw new \InvalidArgumentException(
+                "Permission {$permission} does not support {$scopeType} scope.",
+            );
+        }
+
+        $store = $this->scopedStore();
+        $overrides = $store->getScoped($type, $id, $scopeType, $scopeId);
+        $old = array_key_exists($permission, $overrides)
+            ? (bool)$overrides[$permission]
+            : null;
+
+        $overrides[$permission] = $value;
+        $store->putScoped(
+            $type,
+            $id,
+            $scopeType,
+            $scopeId,
+            $definitions->validateOverrides($overrides),
+        );
+
+        $context['metadata'] = array_merge(
+            [
+                'scope_type' => $scopeType,
+                'scope_id' => (string)$scopeId,
+            ],
+            $context['metadata'] ?? [],
+        );
+
+        return $this->result(
+            $value,
+            $this->logPayload(
+                $value ? 'permission.granted' : 'permission.denied',
+                $type,
+                $id,
+                $permission,
+                $old,
+                $value,
+                $context,
+            ),
+        );
+    }
+
+    public function clearScoped(
+        string $type,
+        int|string $id,
+        string $permission,
+        string $scopeType,
+        int|string $scopeId,
+        array $context = [],
+    ): OperationResult {
+        $store = $this->scopedStore();
+        $overrides = $store->getScoped($type, $id, $scopeType, $scopeId);
+        $old = array_key_exists($permission, $overrides)
+            ? (bool)$overrides[$permission]
+            : null;
+
+        unset($overrides[$permission]);
+
+        if ($overrides === []) {
+            $store->removeScoped($type, $id, $scopeType, $scopeId);
+        } else {
+            $store->putScoped($type, $id, $scopeType, $scopeId, $overrides);
+        }
+
+        $context['metadata'] = array_merge(
+            [
+                'scope_type' => $scopeType,
+                'scope_id' => (string)$scopeId,
+            ],
+            $context['metadata'] ?? [],
+        );
+
+        return $this->result(
+            true,
+            $this->logPayload(
+                'permission.cleared',
+                $type,
+                $id,
+                $permission,
+                $old,
+                null,
+                $context,
+            ),
+        );
+    }
+
     public function clearAll(string $type, int|string $id): void
     {
         $this->store()->remove($type, $id);
@@ -523,6 +696,17 @@ final class PermissionManager
         }
 
         return $this->store;
+    }
+
+    private function scopedStore(): ScopedPermissionStoreInterface
+    {
+        $store = $this->store();
+        if (!$store instanceof ScopedPermissionStoreInterface) {
+            throw new RuntimeException(
+                'The configured permission store does not support scoped permissions.',
+            );
+        }
+        return $store;
     }
 
     private function result(mixed $data, array $log): OperationResult
