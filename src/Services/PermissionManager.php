@@ -672,6 +672,23 @@ final class PermissionManager
         return $this->defs()->get($permission);
     }
 
+    public function permissionGroup(string $permission): ?string
+    {
+        return $this->defs()->group($permission);
+    }
+
+    /** @return list<string> */
+    public function permissionGroups(): array
+    {
+        return $this->defs()->groups();
+    }
+
+    /** @return array<string, array<string, array<string, mixed>>> */
+    public function groupedDefinitions(string $ungrouped = 'Other'): array
+    {
+        return $this->defs()->grouped($ungrouped);
+    }
+
     public function defined(string $permission): bool
     {
         return $this->defs()->has($permission);
