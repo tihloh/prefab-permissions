@@ -78,6 +78,33 @@ documents.view
 
 Stable machine IDs should be used in application code; friendly names are for humans and interfaces.
 
+Definitions may also include an optional `group` value for presentation:
+
+```php
+return [
+    'users.manage' => [
+        'name' => 'Manage Users',
+        'group' => 'Users & Access',
+        'default' => false,
+        'scopes' => ['global', 'organization'],
+    ],
+    'requests.edit' => [
+        'name' => 'Edit Requests',
+        'group' => 'Requests',
+        'default' => false,
+    ],
+];
+```
+
+Grouping is metadata only. It does not change authorization, inheritance, or
+scope resolution. Interfaces can retrieve grouped definitions with:
+
+```php
+$permissions->permissionGroup('users.manage');
+$permissions->permissionGroups();
+$permissions->groupedDefinitions();
+```
+
 ---
 
 # 3. Checking permission
