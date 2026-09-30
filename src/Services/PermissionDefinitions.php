@@ -156,6 +156,55 @@ final class PermissionDefinitions
     }
 
     /**
+     * Return the human-facing permission group/category.
+     *
+     * Grouping is presentation metadata only. It does not affect permission
+     * resolution, inheritance, storage, or scope behavior.
+     */
+    public function group(string $permission): ?string
+    {
+        $definition = $this->get($permission);
+        if (!$definition) {
+            return null;
+        }
+
+        $group = trim((string)($definition['group'] ?? ''));
+        return $group !== '' ? $group : null;
+    }
+
+    /** @return list<string> */
+    public function groups(): array
+    {
+        $groups = [];
+        foreach (array_keys($this->definitions) as $permission) {
+            $group = $this->group((string)$permission);
+            if ($group !== null) {
+                $groups[$group] = true;
+            }
+        }
+
+        return array_keys($groups);
+    }
+
+    /**
+     * Return definitions grouped by their optional group metadata.
+     *
+     * Ungrouped definitions use the supplied fallback label.
+     *
+     * @return array<string, array<string, array<string, mixed>>>
+     */
+    public function grouped(string $ungrouped = 'Other'): array
+    {
+        $result = [];
+        foreach ($this->definitions as $permission => $definition) {
+            $group = $this->group((string)$permission) ?? $ungrouped;
+            $result[$group][(string)$permission] = $definition;
+        }
+
+        return $result;
+    }
+
+    /**
      * Validate an override map against known permission IDs.
      *
      * @param array<string, bool> $permissions
