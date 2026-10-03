@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS prefab_groups (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    id VARCHAR(16) NOT NULL PRIMARY KEY,
     name VARCHAR(191) NOT NULL,
     description VARCHAR(255) NULL,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS prefab_groups (
 
 CREATE TABLE IF NOT EXISTS prefab_user_groups (
     user_id VARCHAR(191) NOT NULL,
-    group_id BIGINT UNSIGNED NOT NULL,
+    group_id VARCHAR(16) NOT NULL,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, group_id),
     INDEX idx_prefab_user_groups_group (group_id),
