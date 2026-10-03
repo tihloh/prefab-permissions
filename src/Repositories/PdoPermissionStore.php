@@ -7,6 +7,7 @@ use RuntimeException;
 use Tihloh\Prefab\DatabaseInterface;
 use Tihloh\Prefab\PdoDatabaseAdapter;
 use Tihloh\Prefab\Permissions\Contracts\ScopedPermissionStoreInterface;
+use Tihloh\Prefab\Permissions\Support\CompactId;
 
 final class PdoPermissionStore implements ScopedPermissionStoreInterface
 {
@@ -139,10 +140,10 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
         array $permissions,
         array $conflictColumns,
     ): void {
-        $params = $keys;
+        $params = ['id' => CompactId::make(), ...$keys];
         $params['permissions'] = json_encode($permissions, JSON_THROW_ON_ERROR);
 
-        $columns = array_keys($keys);
+        $columns = ['id', ...array_keys($keys)];
         $columnList = implode(', ', [...$columns, 'permissions', 'created_at', 'updated_at']);
         $valueList = implode(', ', [
             ...array_map(static fn(string $column): string => ':' . $column, $columns),
@@ -207,7 +208,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
     {
         $sql = match ($this->driver()) {
             'sqlite' => "CREATE TABLE IF NOT EXISTS {$this->table} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id VARCHAR(16) PRIMARY KEY,
                 subject_type TEXT NOT NULL,
                 subject_id TEXT NOT NULL,
                 permissions TEXT NOT NULL DEFAULT '{}',
@@ -217,7 +218,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
             )",
 
             'pgsql' => "CREATE TABLE IF NOT EXISTS {$this->table} (
-                id BIGSERIAL PRIMARY KEY,
+                id VARCHAR(16) PRIMARY KEY,
                 subject_type VARCHAR(64) NOT NULL,
                 subject_id VARCHAR(191) NOT NULL,
                 permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -228,7 +229,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
 
             'sqlsrv' => "IF OBJECT_ID(N'{$this->table}', N'U') IS NULL
                 CREATE TABLE {$this->table} (
-                    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+                    id NVARCHAR(16) PRIMARY KEY,
                     subject_type NVARCHAR(64) NOT NULL,
                     subject_id NVARCHAR(191) NOT NULL,
                     permissions NVARCHAR(MAX) NOT NULL DEFAULT '{}',
@@ -238,7 +239,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
                 )",
 
             'mysql' => "CREATE TABLE IF NOT EXISTS {$this->table} (
-                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                id VARCHAR(16) NOT NULL PRIMARY KEY,
                 subject_type VARCHAR(64) NOT NULL,
                 subject_id VARCHAR(191) NOT NULL,
                 permissions JSON NOT NULL,
@@ -260,7 +261,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
         $table = $this->scopedTable;
         $sql = match ($this->driver()) {
             'sqlite' => "CREATE TABLE IF NOT EXISTS {$table} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id VARCHAR(16) PRIMARY KEY,
                 subject_type TEXT NOT NULL,
                 subject_id TEXT NOT NULL,
                 scope_type TEXT NOT NULL,
@@ -272,7 +273,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
             )",
 
             'pgsql' => "CREATE TABLE IF NOT EXISTS {$table} (
-                id BIGSERIAL PRIMARY KEY,
+                id VARCHAR(16) PRIMARY KEY,
                 subject_type VARCHAR(64) NOT NULL,
                 subject_id VARCHAR(191) NOT NULL,
                 scope_type VARCHAR(64) NOT NULL,
@@ -285,7 +286,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
 
             'sqlsrv' => "IF OBJECT_ID(N'{$table}', N'U') IS NULL
                 CREATE TABLE {$table} (
-                    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+                    id NVARCHAR(16) PRIMARY KEY,
                     subject_type NVARCHAR(64) NOT NULL,
                     subject_id NVARCHAR(191) NOT NULL,
                     scope_type NVARCHAR(64) NOT NULL,
@@ -298,7 +299,7 @@ final class PdoPermissionStore implements ScopedPermissionStoreInterface
                 )",
 
             'mysql' => "CREATE TABLE IF NOT EXISTS {$table} (
-                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                id VARCHAR(16) NOT NULL PRIMARY KEY,
                 subject_type VARCHAR(64) NOT NULL,
                 subject_id VARCHAR(191) NOT NULL,
                 scope_type VARCHAR(64) NOT NULL,
