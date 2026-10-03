@@ -7,6 +7,7 @@ use RuntimeException;
 use Tihloh\Prefab\PrefabRuntime;
 use Tihloh\Prefab\Permissions\DTOs\Group;
 use Tihloh\Prefab\Permissions\DTOs\OperationResult;
+use Tihloh\Prefab\Permissions\Support\CompactId;
 
 final class GroupManager
 {
@@ -59,9 +60,15 @@ final class GroupManager
             $group = $this->asGroup($external->create($name, $description));
             $id = $group->id;
         } else {
-            $stmt = $this->pdo->prepare('INSERT INTO prefab_groups (name, description) VALUES (:name, :description)');
-            $stmt->execute(['name' => $name, 'description' => $description]);
-            $id = $this->pdo->lastInsertId();
+            $id = CompactId::make();
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO prefab_groups (id, name, description) VALUES (:id, :name, :description)'
+            );
+            $stmt->execute([
+                'id' => $id,
+                'name' => $name,
+                'description' => $description,
+            ]);
             $group = $this->find($id) ?? throw new RuntimeException('Group could not be reloaded.');
         }
         foreach ($permissionOverrides as $permission => $value) $this->permissions->set('group', $id, (string)$permission, (bool)$value, $context);
