@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS prefab_subject_permissions (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    id VARCHAR(16) NOT NULL PRIMARY KEY,
     subject_type VARCHAR(32) NOT NULL,
     subject_id VARCHAR(191) NOT NULL,
     permissions JSON NOT NULL,
