@@ -15,10 +15,69 @@ use RuntimeException;
  */
 final class PermissionDefinitions
 {
-    /** @param array<string, array<string, mixed>> $definitions */
-    public function __construct(
-        private array $definitions,
-    ) {
+    /** @var array<string, array<string, mixed>> */
+    private array $definitions;
+
+    /**
+     * Accept either a legacy flat permission map or the canonical grouped
+     * catalog: permissions -> groups -> category -> permission ID -> definition.
+     *
+     * Category names are presentation metadata, not assignable RBAC groups.
+     *
+     * @param array<string, mixed> $definitions
+     */
+    public function __construct(array $definitions)
+    {
+        $this->definitions = self::normalize($definitions);
+    }
+
+    /** @param array<string, mixed> $source
+     *  @return array<string, array<string, mixed>>
+     */
+    private static function normalize(array $source): array
+    {
+        // Backward compatible: existing flat PHP and JSON catalogs continue
+        // to work without changes.
+        if (!array_key_exists('permissions', $source)) {
+            return $source;
+        }
+
+        $container = $source['permissions'];
+        if (!is_array($container) || !isset($container['groups'])
+            || !is_array($container['groups'])) {
+            throw new InvalidArgumentException(
+                'Nested permission configuration must contain permissions.groups.'
+            );
+        }
+
+        $flattened = [];
+        foreach ($container['groups'] as $category => $permissions) {
+            if (!is_string($category) || trim($category) === ''
+                || !is_array($permissions)) {
+                throw new InvalidArgumentException('Invalid permission category in permissions.groups.');
+            }
+            foreach ($permissions as $permission => $definition) {
+                if (!is_string($permission) || trim($permission) === ''
+                    || !is_array($definition)) {
+                    throw new InvalidArgumentException(
+                        'Invalid permission ID or definition in category ' . $category
+                    );
+                }
+                if (array_key_exists($permission, $flattened)) {
+                    throw new InvalidArgumentException(
+                        'Duplicate permission ID in grouped catalog: ' . $permission
+                    );
+                }
+                if (isset($definition['group']) && $definition['group'] !== $category) {
+                    throw new InvalidArgumentException(
+                        'Conflicting category for permission: ' . $permission
+                    );
+                }
+                $definition['group'] = $category;
+                $flattened[$permission] = $definition;
+            }
+        }
+        return $flattened;
     }
 
     /**
@@ -26,7 +85,7 @@ final class PermissionDefinitions
      *
      * Supported sources:
      * - PermissionDefinitions instance
-     * - PHP array
+     * - Legacy flat PHP array or grouped permissions.groups array
      * - .php file returning an array
      * - .json file containing an object/associative array
      */

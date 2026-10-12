@@ -78,26 +78,41 @@ documents.view
 
 Stable machine IDs should be used in application code; friendly names are for humans and interfaces.
 
-Definitions may also include an optional `group` value for presentation:
+**Recommended: one grouped catalog** (works in PHP and JSON):
 
 ```php
 return [
-    'users.manage' => [
-        'name' => 'Manage Users',
-        'group' => 'Users & Access',
-        'default' => false,
-        'scopes' => ['global', 'organization'],
-    ],
-    'requests.edit' => [
-        'name' => 'Edit Requests',
-        'group' => 'Requests',
-        'default' => false,
+    'permissions' => [
+        'groups' => [
+            'Users & Access' => [
+                'users.manage' => [
+                    'name' => 'Manage Users',
+                    'description' => 'Manage users within authorized scopes.',
+                    'default' => false,
+                    'scopes' => ['global', 'organization'],
+                ],
+            ],
+            'System' => [
+                'settings.manage' => [
+                    'name' => 'Manage System Settings',
+                    'description' => 'Manage platform settings.',
+                    'default' => false,
+                    'scopes' => ['global'],
+                ],
+            ],
+        ],
     ],
 ];
 ```
 
-Grouping is metadata only. It does not change authorization, inheritance, or
-scope resolution. Interfaces can retrieve grouped definitions with:
+Prefab Permissions normalizes `permissions → groups → category → permission ID`
+into its usual flat map automatically. `definitions()`, `definition()`,
+`groupedDefinitions()`, `permissionGroup()`, and permission resolution work
+the same way. Each category is injected as the definition's `group` metadata.
+
+Legacy flat PHP/JSON definitions are still supported, including those
+with a `group` property per permission. Categories only organize display;
+they are **not** assignable access groups. Interfaces can retrieve them with:
 
 ```php
 $permissions->permissionGroup('users.manage');
@@ -656,7 +671,16 @@ scoped group decision
 definition default
 ```
 
-This means a global grant applies in every organization, while an organization grant applies only when the application checks that organization's scope.
+This means a global grant applies in every organization **only if** the
+permission definition includes `global` in its `scopes`. For an
+organization-only permission, Prefab ignores historical global overrides
+and requires an explicit organization context. A permission marked
+`['global']` never accepts an organization-scoped override; any valid
+global grant can still be checked against an organization resource.
+
+The application remains responsible for providing the correct user group IDs
+for the requested resource organization. Prefab Permissions does not
+independently verify organization membership.
 
 Prefab Permissions does not decide whether a document, user, request, or other resource belongs to an organization. The host application supplies the resource's scope:
 

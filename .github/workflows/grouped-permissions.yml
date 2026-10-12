@@ -1,0 +1,24 @@
+name: Permission definition compatibility
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/Services/PermissionDefinitions.php
+      - src/Services/PermissionManager.php
+      - tests/grouped_permissions_smoke.php
+      - .github/workflows/grouped-permissions.yml
+  pull_request:
+
+jobs:
+  grouped-permissions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax checks
+        run: |
+          php -l src/Services/PermissionDefinitions.php
+          php -l src/Services/PermissionManager.php
+          php -l tests/grouped_permissions_smoke.php
+      - name: Grouped catalog compatibility and scoped resolution
+        run: php tests/grouped_permissions_smoke.php

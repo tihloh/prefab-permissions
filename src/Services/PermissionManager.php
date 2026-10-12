@@ -347,25 +347,34 @@ final class PermissionManager
             $subjectId = $subject;
         }
 
-        // Global explicit decisions always apply, including inside a scope.
-        $global = $this->resolveFrom(
-            fn(string $type, int|string $id): array => $store->get($type, $id),
-            $subjectId,
-            $permission,
-            $groupIds,
-            'user',
-            'group',
-        );
-
-        if ($global !== null) {
-            return $global;
+        if (($scopeType === null) !== ($scopeId === null)) {
+            throw new \InvalidArgumentException('Both scope type and scope ID are required.');
         }
 
-        if ($scopeType !== null || $scopeId !== null) {
-            if ($scopeType === null || $scopeId === null) {
-                throw new \InvalidArgumentException('Both scope type and scope ID are required.');
-            }
+        $supportsGlobal = $definitions->supportsScope($permission, 'global');
+        if ($scopeType === null && !$supportsGlobal) {
+            // Even historical global overrides must not grant an
+            // organization-only permission without a resource scope.
+            return new PermissionResult(false, 'scope_not_supported');
+        }
 
+        // Global rules are usable across organizations only when the
+        // permission explicitly advertises global availability.
+        if ($supportsGlobal) {
+            $global = $this->resolveFrom(
+                fn(string $type, int|string $id): array => $store->get($type, $id),
+                $subjectId,
+                $permission,
+                $groupIds,
+                'user',
+                'group',
+            );
+            if ($global !== null) {
+                return $global;
+            }
+        }
+
+        if ($scopeType !== null) {
             if (!$definitions->supportsScope($permission, $scopeType)) {
                 return new PermissionResult(false, 'scope_not_supported');
             }
