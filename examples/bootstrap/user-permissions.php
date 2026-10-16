@@ -7,7 +7,7 @@
  * $resolved = $permissions->resolvedFor($user);
  * $groups = $groupManager->all();
  * $userGroupIds = $groupManager->groupIdsForUser($user->id);
- * $scopeType = 'organization'; // Optional. Omit for the general description.
+ * $scopeType = null; // Use 'organization' only when $resolved and $overrides also use that scope.
  */
 ?>
 <form method="post">
