@@ -681,6 +681,21 @@ final class PermissionManager
         return $this->defs()->get($permission);
     }
 
+    /**
+     * Return the scope-specific description, falling back to the general
+     * permission description when no scope override exists.
+     */
+    public function permissionDescription(string $permission, ?string $scopeType = null): ?string
+    {
+        return $this->defs()->description($permission, $scopeType);
+    }
+
+    /** @return array<string, string> */
+    public function permissionScopeDescriptions(string $permission): array
+    {
+        return $this->defs()->scopeDescriptions($permission);
+    }
+
     public function permissionGroup(string $permission): ?string
     {
         return $this->defs()->group($permission);
