@@ -35,15 +35,22 @@ namespace {
                 "Users & Access"=>[
                     "users.manage"=>[
                         "name"=>"Manage Users",
-                        "description"=>"Manage users in a permitted organization.",
+                        "description"=>"Manage users across authorized contexts.",
                         "default"=>false,
                         "scopes"=>["organization"],
+                        "scope_descriptions"=>[
+                            "organization"=>"Manage users in this organization.",
+                        ],
                     ],
                     "users.view"=>[
                         "name"=>"View Users",
                         "description"=>"View user records.",
                         "default"=>false,
                         "scopes"=>["global","organization"],
+                        "scope_descriptions"=>[
+                            "global"=>"View user records across the platform.",
+                            "organization"=>"View user records in this organization.",
+                        ],
                     ],
                 ],
                 "System"=>[
@@ -67,6 +74,62 @@ namespace {
     checkGrouped($definitions->scopes("users.manage")===["organization"],"Scopes changed.");
     checkGrouped($definitions->supportsScope("logs.view","global"),"Global support missing.");
     checkGrouped(!$definitions->supportsScope("logs.view","organization"),"Unsupported organization scope accepted.");
+
+    // Both kinds of description are independent optional presentation metadata.
+    checkGrouped($definitions->description("users.view")==="View user records.",
+        "General description should remain available alongside scoped text.");
+    checkGrouped($definitions->description("users.view","global")==="View user records across the platform.",
+        "Global scope must use its own description.");
+    checkGrouped($definitions->description("users.view","organization")==="View user records in this organization.",
+        "Organization scope must use its own description.");
+    checkGrouped($definitions->scopeDescriptions("users.view")===
+        ["global"=>"View user records across the platform.",
+         "organization"=>"View user records in this organization."],
+        "Explicit per-scope descriptions should remain independently addressable.");
+    checkGrouped($definitions->description("logs.view","global")==="View platform audit logs.",
+        "Missing scope text should fall back to the general description.");
+    checkGrouped($definitions->description("missing","global")===null,
+        "Unknown permissions must not invent descriptions.");
+
+    $scopeOnly=PermissionDefinitions::from([
+        "report.export"=>[
+            "name"=>"Export Reports",
+            "scopes"=>["global","organization"],
+            "scope_descriptions"=>[
+                "global"=>"Export reports across the platform.",
+                "organization"=>"Export reports for an organization.",
+            ],
+        ],
+        "reports.view"=>[
+            "name"=>"View Reports",
+            "scopes"=>["global","organization"],
+            "description"=>"  Default report viewing.  ",
+            "scope_descriptions"=>["organization"=>"  "],
+        ],
+        "bare"=>["name"=>"Bare Permission"],
+    ]);
+    checkGrouped($scopeOnly->description("report.export")===null
+        && $scopeOnly->description("report.export","organization")==="Export reports for an organization.",
+        "A permission may declare only scoped descriptions without a general description.");
+    checkGrouped($scopeOnly->description("reports.view","organization")==="Default report viewing."
+        && $scopeOnly->scopeDescriptions("reports.view")===[],
+        "Blank scoped descriptions should use general fallback.");
+    checkGrouped($scopeOnly->description("bare")===null
+        && $scopeOnly->description("bare","global")===null
+        && $scopeOnly->scopeDescriptions("bare")===[],
+        "Both description levels must remain optional.");
+
+    foreach([
+        ["users.view"=>["scopes"=>["global"],"scope_descriptions"=>"wrong"]],
+        ["users.view"=>["scopes"=>["global"],"scope_descriptions"=>["organization"=>"not supported"]]],
+        ["users.view"=>["scopes"=>["organization"],"scope_descriptions"=>["organization"=>false]]],
+        ["users.view"=>["scope_descriptions"=>[123=>"numeric scope"]]],
+    ] as $invalidDescriptions){
+        $threw=false;
+        try{PermissionDefinitions::from($invalidDescriptions);}
+        catch(\InvalidArgumentException){$threw=true;}
+        checkGrouped($threw,"Invalid scope descriptions must be rejected.");
+    }
 
     $direct=new PermissionDefinitions($catalog);
     checkGrouped($direct->all()===$definitions->all(),"Direct constructor did not normalize.");
@@ -125,6 +188,13 @@ namespace {
         public function removeScoped(string $subjectType,int|string $subjectId,string $scopeType,int|string $scopeId): void {}
     }
     $permissions=new PermissionManager($definitions,new MemoryPermissionStore());
+    checkGrouped($permissions->permissionDescription("users.view")==="View user records."
+        && $permissions->permissionDescription("users.view","organization")==="View user records in this organization."
+        && $permissions->permissionDescription("logs.view","global")==="View platform audit logs.",
+        "Manager must expose effective descriptions with general fallback.");
+    checkGrouped($permissions->permissionScopeDescriptions("users.view")===
+        $definitions->scopeDescriptions("users.view"),
+        "Manager must expose explicit scope descriptions without inserting fallback values.");
     checkGrouped(!$permissions->can("1","users.manage",["g_global"]),
         "Organization-only permission leaked through a global user or group rule.");
     checkGrouped($permissions->can("1","users.manage",["g_office"],"organization","GO"),
