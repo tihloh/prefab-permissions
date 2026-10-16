@@ -131,9 +131,9 @@ inheritance, or the scope check itself.
 ```
 
 Only a scoped description is also valid (omit `description`), as is a single
-general `description` with no `scope_descriptions`. An omitted or blank
-scope description falls back to the general description if available; otherwise
-the result is `null`. Blank general descriptions also yield `null`.
+general `description` with no `scope_descriptions`. An omitted, blank, or
+`null` scope description falls back to the general description if available;
+otherwise the result is `null`. Blank general descriptions also yield `null`.
 
 ```php
 $permissions->permissionDescription('users.manage');
