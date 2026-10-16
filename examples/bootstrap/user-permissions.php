@@ -7,6 +7,7 @@
  * $resolved = $permissions->resolvedFor($user);
  * $groups = $groupManager->all();
  * $userGroupIds = $groupManager->groupIdsForUser($user->id);
+ * $scopeType = 'organization'; // Optional. Omit for the general description.
  */
 ?>
 <form method="post">
@@ -32,7 +33,7 @@
                 <tbody>
                 <?php foreach ($definitions as $id => $definition): $result = $resolved[$id]; ?>
                     <tr>
-                        <td><strong><?= htmlspecialchars($definition['name'] ?? $id) ?></strong><div class="small text-body-secondary"><?= htmlspecialchars($definition['description'] ?? '') ?></div></td>
+                        <td><strong><?= htmlspecialchars($definition['name'] ?? $id) ?></strong><div class="small text-body-secondary"><?= htmlspecialchars($permissions->permissionDescription((string)$id, $scopeType ?? null) ?? '') ?></div></td>
                         <td>
                             <select class="form-select form-select-sm" name="permissions[<?= htmlspecialchars($id) ?>]">
                                 <option value="" <?= !array_key_exists($id, $overrides) ? 'selected' : '' ?>>Inherit</option>
