@@ -104,7 +104,7 @@ namespace {
             "name"=>"View Reports",
             "scopes"=>["global","organization"],
             "description"=>"  Default report viewing.  ",
-            "scope_descriptions"=>["organization"=>"  "],
+            "scope_descriptions"=>["organization"=>null, "global"=>"  "],
         ],
         "bare"=>["name"=>"Bare Permission"],
     ]);
