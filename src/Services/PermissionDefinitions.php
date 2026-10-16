@@ -115,7 +115,7 @@ final class PermissionDefinitions
             )));
             foreach ($descriptions as $scope => $text) {
                 if (!is_string($scope) || !in_array($scope, $declared, true)
-                    || !is_string($text)) {
+                    || ($text !== null && !is_string($text))) {
                     throw new InvalidArgumentException(
                         "Invalid scope description for permission {$permission}."
                     );
@@ -301,6 +301,10 @@ final class PermissionDefinitions
         $result = [];
 
         foreach ($raw as $scope => $text) {
+            if ($text === null) {
+                continue;
+            }
+
             $text = trim($text);
             if ($text !== '') {
                 $result[$scope] = $text;
