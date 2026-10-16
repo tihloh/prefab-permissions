@@ -39,7 +39,7 @@ final class PermissionDefinitions
         // Backward compatible: existing flat PHP and JSON catalogs continue
         // to work without changes.
         if (!array_key_exists('permissions', $source)) {
-            return $source;
+            return self::validateDescriptions($source);
         }
 
         $container = $source['permissions'];
@@ -77,7 +77,53 @@ final class PermissionDefinitions
                 $flattened[$permission] = $definition;
             }
         }
-        return $flattened;
+        return self::validateDescriptions($flattened);
+    }
+
+    /**
+     * Check optional scope-specific descriptions without changing the legacy
+     * flat/grouped definition shapes or the list of supported scopes.
+     *
+     * @param array<string, mixed> $definitions
+     * @return array<string, array<string, mixed>>
+     */
+    private static function validateDescriptions(array $definitions): array
+    {
+        foreach ($definitions as $permission => $definition) {
+            if (!is_array($definition)
+                || !array_key_exists('scope_descriptions', $definition)) {
+                continue;
+            }
+
+            $descriptions = $definition['scope_descriptions'];
+            if (!is_array($descriptions)) {
+                throw new InvalidArgumentException(
+                    "Scope descriptions for {$permission} must be a scope-to-text map."
+                );
+            }
+
+            $declared = $definition['scopes'] ?? ['global'];
+            if (!is_array($declared)) {
+                $declared = [$declared];
+            }
+            $declared = array_values(array_unique(array_filter(
+                array_map(
+                    static fn(mixed $scope): string => is_string($scope) ? trim($scope) : '',
+                    $declared,
+                ),
+                static fn(string $scope): bool => $scope !== '',
+            )));
+            foreach ($descriptions as $scope => $text) {
+                if (!is_string($scope) || !in_array($scope, $declared, true)
+                    || !is_string($text)) {
+                    throw new InvalidArgumentException(
+                        "Invalid scope description for permission {$permission}."
+                    );
+                }
+            }
+        }
+
+        return $definitions;
     }
 
     /**
@@ -212,6 +258,56 @@ final class PermissionDefinitions
     public function supportsScope(string $permission, string $scopeType): bool
     {
         return in_array($scopeType, $this->scopes($permission), true);
+    }
+
+    /**
+     * General description, or a scope-specific description when one is set.
+     *
+     * A missing/blank scope entry falls back to the general description.
+     * Either level may be omitted. This metadata never affects authorization.
+     */
+    public function description(string $permission, ?string $scopeType = null): ?string
+    {
+        $definition = $this->get($permission);
+        if ($definition === null) {
+            return null;
+        }
+
+        if ($scopeType !== null) {
+            $specific = $this->scopeDescriptions($permission)[$scopeType] ?? null;
+            if ($specific !== null) {
+                return $specific;
+            }
+        }
+
+        $general = $definition['description'] ?? null;
+        if (!is_string($general)) {
+            return null;
+        }
+
+        $general = trim($general);
+        return $general !== '' ? $general : null;
+    }
+
+    /**
+     * Return explicitly provided non-empty scope descriptions only.
+     * No general fallback is inserted in this map.
+     *
+     * @return array<string, string>
+     */
+    public function scopeDescriptions(string $permission): array
+    {
+        $raw = $this->get($permission)['scope_descriptions'] ?? [];
+        $result = [];
+
+        foreach ($raw as $scope => $text) {
+            $text = trim($text);
+            if ($text !== '') {
+                $result[$scope] = $text;
+            }
+        }
+
+        return $result;
     }
 
     /**
