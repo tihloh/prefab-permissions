@@ -110,6 +110,49 @@ into its usual flat map automatically. `definitions()`, `definition()`,
 `groupedDefinitions()`, `permissionGroup()`, and permission resolution work
 the same way. Each category is injected as the definition's `group` metadata.
 
+## General and per-scope descriptions (optional)
+
+Each permission can define a general `description`, a `scope_descriptions` map,
+**both**, or neither. Scope keys must match its declared `scopes`.
+This is presentation metadata only: it does **not** change grants, defaults,
+inheritance, or the scope check itself.
+
+```php
+'users.manage' => [
+    'name' => 'Manage Users',
+    'description' => 'Manage authorized user accounts.', // optional general fallback
+    'default' => false,
+    'scopes' => ['global', 'organization'],
+    'scope_descriptions' => [                          // optional
+        'global' => 'Manage users across the platform.',
+        'organization' => 'Manage users within the selected organization.',
+    ],
+],
+```
+
+Only a scoped description is also valid (omit `description`), as is a single
+general `description` with no `scope_descriptions`. An omitted or blank
+scope description falls back to the general description if available; otherwise
+the result is `null`. Blank general descriptions also yield `null`.
+
+```php
+$permissions->permissionDescription('users.manage');
+// "Manage authorized user accounts."
+$permissions->permissionDescription('users.manage', 'organization');
+// "Manage users within the selected organization."
+$permissions->permissionScopeDescriptions('users.manage');
+// ['global' => 'Manage users across the platform.', 'organization' => ...]
+
+// The lower-level definition API also supports:
+$definitions->description('users.manage', 'global');
+$definitions->scopeDescriptions('users.manage');
+```
+
+The normalized `definition()`, `definitions()`, and
+`groupedDefinitions()` methods retain both metadata fields unchanged.
+PHP arrays and JSON definition files support the same shape. Unrecognized
+scope keys and non-string scope descriptions are rejected during loading.
+
 Legacy flat PHP/JSON definitions are still supported, including those
 with a `group` property per permission. Categories only organize display;
 they are **not** assignable access groups. Interfaces can retrieve them with:
